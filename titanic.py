@@ -9,10 +9,14 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn import svm
 from sklearn.model_selection import train_test_split
-import sklearn.preprocessing as preprocessing
-from sklearn.preprocessing import Imputer
+# import sklearn.preprocessing as preprocessing
+from sklearn.preprocessing import Imputer, StandardScaler
+from sklearn_pandas import DataFrameMapper
 from sklearn.ensemble import RandomForestRegressor
 from sklearn import linear_model
+from sklearn.model_selection import cross_val_score, train_test_split
+from sklearn.model_selection import learning_curve, ShuffleSplit
+from sklearn.ensemble import BaggingRegressor
 
 import pdb
 
@@ -254,11 +258,10 @@ def titanic3():
 	df.drop(['Pclass', 'Name', 'Sex', 'Ticket', 'Cabin', 'Embarked'], axis=1, inplace=True)
 	# print df.head(10)
 
-	scaler = preprocessing.StandardScaler()
-	age_scale_param = scaler.fit(df['Age'])
-	df['Age_scaled'] = scaler.fit_transform(df['Age'], age_scale_param)
-	fare_scale_param = scaler.fit(df['Fare'])
-	df['Fare_scaled'] = scaler.fit_transform(df['Fare'], fare_scale_param)
+	# 对单独列进行缩放，数据为1维，所以使用如下方式进行处理
+	mapper = DataFrameMapper([(['Age', 'Fare'], StandardScaler())])
+	df['Age_scaled'] = mapper.fit_transform(df)[:, 0]
+	df['Fare_scaled'] = mapper.fit_transform(df)[:, 1]
 	# print df.head(10)
 
 	train_df = df.filter(regex='Survived|Age_.*|SibSp|Parch|Fare_.*|Cabin_.*|Embarked_.*|Sex_.*|Pclass_.*')
@@ -293,15 +296,166 @@ def titanic3():
 
 	test_set = df_test.filter(regex='Age_.*|SibSp|Parch|Fare_.*|Cabin_.*|Embarked_.*|Sex_.*|Pclass_.*')
 	predictions= clf.predict(test_set)
+	# result = pd.DataFrame({
+	# 	'PassengerId': test['PassengerId'].as_matrix(),
+	# 	'Survived': predictions.astype(np.int32)
+	# })
+	# result.to_csv("prediction3.csv", index=False)
+
+	# 查看特征权重情况
+	print pd.DataFrame({"columns":list(train_df.columns)[1:], "coef":list(clf.coef_.T)})
+
+def plot_learning_curve(estimator, title, X, y, ylim=None, cv=None, n_jobs=1,
+						train_sizes=np.linspace(.05, 1., 20), verbose=0, plot=True):
+	train_sizes, train_scores, test_scores = learning_curve(estimator, X, y, cv=cv, n_jobs=n_jobs, train_sizes=train_sizes, verbose=verbose)
+	train_scores_mean = np.mean(train_scores, axis=1)
+	train_scores_std = np.std(train_scores, axis=1)
+	test_scores_mean = np.mean(test_scores, axis=1)
+	test_scores_std = np.std(test_scores, axis=1)
+
+	if plot:
+		set_ch()
+		plt.figure()
+		plt.title(title)
+		if ylim is not None:
+			plt.ylim(*ylim)
+		plt.xlabel(u"训练样本数")
+		plt.ylabel(u"得分")
+		plt.gca().invert_yaxis()
+		plt.grid()
+
+		plt.fill_between(train_sizes, train_scores_mean - train_scores_std, train_scores_mean + train_scores_std,
+						 alpha=0.1, color="b")
+		plt.fill_between(train_sizes, test_scores_mean - test_scores_std, test_scores_mean + test_scores_std,
+						 alpha=0.1, color="r")
+		plt.plot(train_sizes, train_scores_mean, 'o-', color='b', label=u"训练集上得分")
+		plt.plot(train_sizes, test_scores_mean, 'o-', color='r', label=u"交叉验证集上得分")
+		plt.legend(loc='best')
+		plt.draw()
+		plt.show()
+		plt.gca().invert_yaxis()
+
+	midpoint = ((train_scores_mean[-1] + train_scores_std[-1]) + (test_scores_mean[-1] - test_scores_std[-1])) / 2
+	diff = (train_scores_mean[-1] + train_scores_std[-1]) - (test_scores_mean[-1] - test_scores_std[-1])
+	return midpoint, diff
+
+def cv_train():
+	train = pd.read_csv("input/train.csv")
+
+	train, rfr = set_missing_ages(train)
+	train = set_Cabin_type(train)
+
+	# print train.head(10)
+
+	# get_dummies()将该列数据分成若干列，列名为prefix前缀+类别名，列数据则为该类出现的位置为1，未出现则为0
+	dummies_Cabin = pd.get_dummies(train['Cabin'], prefix='Cabin')
+	dummies_Embarked = pd.get_dummies(train['Embarked'], prefix='Embarked')
+	dummies_Sex = pd.get_dummies(train['Sex'], prefix='Sex')
+	dummies_Pclass = pd.get_dummies(train['Pclass'], prefix='Pclass')
+
+	df = pd.concat([train, dummies_Cabin, dummies_Embarked, dummies_Sex, dummies_Pclass], axis=1)
+	df.drop(['Pclass', 'Name', 'Sex', 'Ticket', 'Cabin', 'Embarked'], axis=1, inplace=True)
+	# print df.head(10)
+
+	# 对单独列进行缩放，数据为1维，所以使用如下方式进行处理
+	mapper = DataFrameMapper([(['Age', 'Fare'], StandardScaler())])
+	df['Age_scaled'] = mapper.fit_transform(df)[:, 0]
+	df['Fare_scaled'] = mapper.fit_transform(df)[:, 1]
+	# print df.head(10)
+
+	split_train, split_cv = train_test_split(df, test_size=0.3, random_state=0)
+	train_df = split_train.filter(regex='Survived|Age_.*|SibSp|Parch|Fare_.*|Cabin_.*|Embarked_.*|Sex_.*|Pclass_.*')
+
+	train_np = train_df.as_matrix()
+	y = train_np[:, 0]
+	X = train_np[:, 1:]
+
+	clf = linear_model.LogisticRegression(C=1.0, penalty='l1', tol=1e-6)
+	cross_val_score(clf, X, y, cv=5)
+	clf.fit(X, y)
+
+	cv_df = split_cv.filter(regex='Survived|Age_.*|SibSp|Parch|Fare_.*|Cabin_.*|Embarked_.*|Sex_.*|Pclass_.*')
+	X_cv = cv_df.as_matrix()[:, 1:]
+	y_cv = cv_df.as_matrix()[:, 0]
+	predictions = clf.predict(X_cv)
+
+	origin_train = pd.read_csv("input/train.csv")
+	bad_cases = origin_train.loc[origin_train['PassengerId'].isin(split_cv[predictions != y_cv]['PassengerId'].values)]
+	# print bad_cases
+
+	cv = ShuffleSplit(n_splits=100, test_size=0.3, random_state=0)
+	plot_learning_curve(clf, u"学习曲线", X, y, cv=cv)
+
+def modelensemble():
+	train = pd.read_csv("input/train.csv")
+
+	train, rfr = set_missing_ages(train)
+	train = set_Cabin_type(train)
+
+	# print train.head(10)
+
+	# get_dummies()将该列数据分成若干列，列名为prefix前缀+类别名，列数据则为该类出现的位置为1，未出现则为0
+	dummies_Cabin = pd.get_dummies(train['Cabin'], prefix='Cabin')
+	dummies_Embarked = pd.get_dummies(train['Embarked'], prefix='Embarked')
+	dummies_Sex = pd.get_dummies(train['Sex'], prefix='Sex')
+	dummies_Pclass = pd.get_dummies(train['Pclass'], prefix='Pclass')
+
+	df = pd.concat([train, dummies_Cabin, dummies_Embarked, dummies_Sex, dummies_Pclass], axis=1)
+	df.drop(['Pclass', 'Name', 'Sex', 'Ticket', 'Cabin', 'Embarked'], axis=1, inplace=True)
+	# print df.head(10)
+
+	# 对单独列进行缩放，数据为1维，所以使用如下方式进行处理
+	mapper = DataFrameMapper([(['Age', 'Fare'], StandardScaler())])
+	df['Age_scaled'] = mapper.fit_transform(df)[:, 0]
+	df['Fare_scaled'] = mapper.fit_transform(df)[:, 1]
+	# print df.head(10)
+
+	split_train, split_cv = train_test_split(df, test_size=0.3, random_state=0)
+	train_df = split_train.filter(regex='Survived|Age_.*|SibSp|Parch|Fare_.*|Cabin_.*|Embarked_.*|Sex_.*|Pclass_.*')
+
+	train_np = train_df.as_matrix()
+	y = train_np[:, 0]
+	X = train_np[:, 1:]
+
+	clf = linear_model.LogisticRegression(C=1.0, penalty='l1', tol=1e-6)
+	bagging_clf = BaggingRegressor(clf, n_estimators=20, max_samples=0.8, max_features=1.0,
+									bootstrap=True, bootstrap_features=False, n_jobs=-1)
+	bagging_clf.fit(X, y)
+
+	test = pd.read_csv("input/test.csv")
+	test.loc[(test.Fare.isnull()), 'Fare'] = 0
+	tmp_df = test[['Age', 'Fare', 'Parch', 'SibSp', 'Pclass']]
+	null_age = tmp_df[test.Age.isnull()].as_matrix()
+	X = null_age[:, 1:]
+	predictedAges = rfr.predict(X)
+	test.loc[(test.Age.isnull()), 'Age'] = predictedAges
+
+	test = set_Cabin_type(test)
+
+	dummies_Cabin = pd.get_dummies(test['Cabin'], prefix='Cabin')
+	dummies_Embarked = pd.get_dummies(test['Embarked'], prefix='Embarked')
+	dummies_Sex = pd.get_dummies(test['Sex'], prefix='Sex')
+	dummies_Pclass = pd.get_dummies(test['Pclass'], prefix='Pclass')
+
+	df_test = pd.concat([test, dummies_Cabin, dummies_Embarked, dummies_Sex, dummies_Pclass], axis=1)
+	df_test.drop(['Pclass', 'Name', 'Sex', 'Ticket', 'Cabin', 'Embarked'], axis=1, inplace=True)
+	# 使用与训练集相同的参数进行特征缩放
+	df_test['Age_scaled'] = mapper.fit_transform(df_test)[:, 0]
+	df_test['Fare_scaled'] = mapper.fit_transform(df_test)[:, 1]
+
+	test_set = df_test.filter(regex='Age_.*|SibSp|Parch|Fare_.*|Cabin_.*|Embarked_.*|Sex_.*|Pclass_.*')
+	predictions = bagging_clf.predict(test_set)
 	result = pd.DataFrame({
-		'PassengerId': test['PassengerId'].as_matrix(),
-		'Survived': predictions.astype(np.int32)
+		'PassengerId':test['PassengerId'].as_matrix(),
+		'Survived':predictions.astype(np.int32)
 	})
-	result.to_csv("prediction3.csv", index=False)
+	result.to_csv("prediction4.csv", index=False)
 
 if __name__ == '__main__':
 	# titanic1()
 	# titanic2()
 	# features1()
 	# features2()
-	titanic3()
+	# titanic3()
+	# cv_train()
+	modelensemble()
