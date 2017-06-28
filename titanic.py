@@ -69,66 +69,67 @@ def features2():
 
 	set_ch()
 
+	plt.subplot(121)
 	Survived_0 = train.Pclass[train.Survived == 0].value_counts()
 	Survived_1 = train.Pclass[train.Survived == 1].value_counts()
 	df1 = pd.DataFrame({u"获救": Survived_1, u"未获救": Survived_0})
-	df1.plot(kind='bar', stacked=True)
+	df1.plot(ax=plt.gca(), kind='bar', stacked=True)
 	plt.title(u"各乘客等级的获救情况")
 	plt.xlabel(u"乘客等级")
 	plt.ylabel(u"人数")
 
+	plt.subplot(122)
 	Survived_m = train.Survived[train.Sex == 'male'].value_counts()
 	Survived_f = train.Survived[train.Sex == 'female'].value_counts()
 	df2 = pd.DataFrame({u'男性': Survived_m, u'女性': Survived_f})
-	df2.plot(kind='bar', stacked=True)
+	df2.plot(ax=plt.gca(), kind='bar', stacked=True)
 	plt.title(u"按性别看获救情况")
 	plt.xlabel(u"性别")
 	plt.ylabel(u"人数")
 	plt.show()
 
-	fig = plt.figure()
-	fig.set(alpha=0.65)
+	#######################################
 	plt.title(u"根据舱等级和性别的获救情况")
 
-	ax1 = fig.add_subplot(141)
-	# ax1 = plt.subplot(141)
-	train.Survived[train.Sex == 'female'][train.Pclass != 3].value_counts().plot(kind='bar', label="female high class", color='#FA2479')
+	# ax1 = fig.add_subplot(141)
+	ax1 = plt.subplot(141)
+	fl = train.Survived[train.Sex == 'female'][train.Pclass != 3].value_counts()
+	fl.plot.bar(title="female, high class", color='#FA2479')
 	ax1.set_xticklabels([u"获救", u"未获救"], rotation=0)
 	plt.legend([u"女性/高级舱"], loc='best')
 
-	ax2 = fig.add_subplot(142, sharey=ax1)
-	# ax2 = plt.subplot(142)
-	train.Survived[train.Sex == 'female'][train.Pclass == 3].value_counts().plot(kind='bar', label="female, low class", color='pink')
+	# ax2 = fig.add_subplot(142, sharey=ax1)
+	ax2 = plt.subplot(142, sharey=ax1)
+	fh = train.Survived[train.Sex == 'female'][train.Pclass == 3].value_counts()
+	fh.plot.bar(ax=ax2, title="female, low class", color='pink')
 	ax2.set_xticklabels([u"未获救", u"获救"], rotation=0)
 	plt.legend([u"女性/低级舱"], loc='best')
 
-	ax3 = fig.add_subplot(143, sharey=ax1)
-	# ax3 = plt.subplot(143)
-	train.Survived[train.Sex == 'male'][train.Pclass != 3].value_counts().plot(kind='bar', label="male, high class", color='lightblue')
+	# ax3 = fig.add_subplot(143, sharey=ax1)
+	ax3 = plt.subplot(143, sharey=ax1)
+	ml = train.Survived[train.Sex == 'male'][train.Pclass != 3].value_counts()
+	ml.plot.bar(ax=ax3, title="male, high class", color='lightblue')
 	ax3.set_xticklabels([u"未获救", u"获救"], rotation=0)
 	plt.legend([u"男性/高级舱"], loc='best')
 
-	ax4 = fig.add_subplot(144, sharey=ax1)
-	# ax4 = plt.subplot(144)
-	train.Survived[train.Sex == 'male'][train.Pclass == 3].value_counts().plot(kind='bar', label="male, low class", color='steelblue')
+	# ax4 = fig.add_subplot(144, sharey=ax1)
+	ax4 = plt.subplot(144, sharey=ax1)
+	mh = train.Survived[train.Sex == 'male'][train.Pclass == 3].value_counts()
+	mh.plot.bar(ax=ax4, title="male, low class", color='steelblue')
 	ax4.set_xticklabels([u"未获救", u"获救"], rotation=0)
 	plt.legend([u"男性/低级舱"], loc='best')
 
 	# plt.subplots_adjust(hspace=0.25, wspace=0.35)
 	plt.show()
 
-	# fig = plt.figure()
-	# fig.set(alpha=0.2)
-
+	plt.subplot(121)
 	Survived_0 = train.Embarked[train.Survived == 0].value_counts()
 	Survived_1 = train.Embarked[train.Survived == 1].value_counts()
 	df = pd.DataFrame({u"获救": Survived_1, u"未获救": Survived_0})
-	df.plot(kind='bar', stacked=True)
+	df.plot(ax=plt.gca(), kind='bar', stacked=True)
 	plt.title(u"各登录港口乘客的获救情况")
 	plt.xlabel(u"登录港口")
 	plt.ylabel(u"人数")
-
-	plt.show()
 
 	# g = train.groupby(['SibSp', 'Survived'])
 	# df = pd.DataFrame(g.count()['PassengerId'])
@@ -138,10 +139,11 @@ def features2():
 	# df = pd.DataFrame(g.count()['PassengerId'])
 	# print df
 
+	plt.subplot(122)
 	Survived_cabin = train.Survived[pd.notnull(train.Cabin)].value_counts()
 	Survived_nocabin = train.Survived[pd.isnull(train.Cabin)].value_counts()
 	df = pd.DataFrame({u'有': Survived_cabin, u'无': Survived_nocabin}).transpose()
-	df.plot(kind='bar', stacked=True)
+	df.plot(ax=plt.gca(), kind='bar', stacked=True)
 	plt.title(u"按Cabin有无看获救情况")
 	plt.xlabel(u"Cabin有无")
 	plt.ylabel(u"人数")
@@ -451,6 +453,112 @@ def modelensemble():
 	})
 	result.to_csv("prediction4.csv", index=False)
 
+def preparing():
+	train = pd.read_csv("input/train.csv")
+
+	# 补充缺失值
+	# Embarked 补充众数'S'
+	train.Embarked = train.Embarked.fillna('S')
+	# Age使用随机森林进行补充
+	train, rfr = set_missing_ages(train)
+
+	# Child
+	train['Child'] = float(0)
+	train.loc[train.Age < 12, 'Child'] = 1
+	# Mother
+	train['Mother'] = float(0)
+	train.loc[(train.Name.str.find('Mrs') != -1) & (train.Parch > 1), 'Mother'] = 1
+	# FamilySize
+	train['FamilySize'] = float(1) + train.Parch + train.SibSp
+	# Title
+	train['Title'] = float(0)
+	train.loc[(train.Name.str.find('Mr') == -1) & (train.Name.str.find('Mrs') == -1) & (train.Name.str.find('Miss') == -1), 'Title'] = 1
+	# CabinType
+	train['CabinType'] = float('NaN')
+	train.loc[train.Cabin.notnull(), 'CabinType'] = train.Cabin.str[0]
+	train.loc[(train.Cabin.isnull()) & (train.Survived == 1), 'CabinType'] = 'C'
+	train.loc[(train.Cabin.isnull()) & (train.Survived == 0), 'CabinType'] = 'T'
+	# dummy Pclass and Sex
+	dummies_Pclass = pd.get_dummies(train['Pclass'], prefix='Pclass')
+	dummies_Sex = pd. get_dummies(train['Sex'], prefix='Sex')
+	dummies_CabinType = pd.get_dummies(train['CabinType'], prefix='CabinType')
+
+	train = pd.concat([train, dummies_Sex, dummies_Pclass, dummies_CabinType], axis=1)
+
+	# 去掉Name, Ticket, Embarked
+	train = train.drop(['Name', 'Ticket', 'Embarked', 'Cabin', 'CabinType', 'PassengerId', 'Sex', 'Pclass', 'SibSp', 'Parch'], axis=1)
+
+	# Features Scaling
+	mapper = DataFrameMapper([(['Age', 'Fare', 'FamilySize'], StandardScaler())])
+	train['Age'] = mapper.fit_transform(train)[:, 0]
+	train['Fare'] = mapper.fit_transform(train)[:, 1]
+	train['FamilySize'] = mapper.fit_transform(train)[:, 2]
+
+	train_part, cv_part = train_test_split(train, test_size=0.2, random_state=0)
+	X = train_part.as_matrix()[:, 1:]
+	y = train_part.as_matrix()[:, 0]
+
+	X_cv = cv_part.as_matrix()[:, 1:]
+	y_cv = cv_part.as_matrix()[:, 0]
+
+	#################### test ###########################
+	test = pd.read_csv("input/test.csv")
+
+	# 补充缺失值
+	# Fare 补充平均值
+	test.loc[test.Fare.isnull(), 'Fare'] = test.Fare.mean()
+	# Age使用随机森林进行补充
+	test, rfr = set_missing_ages(test)
+
+	# Child
+	test['Child'] = float(0)
+	test.loc[test.Age < 12, 'Child'] = 1
+	# Mother
+	test['Mother'] = float(0)
+	test.loc[(test.Name.str.find('Mrs') != -1) & (test.Parch > 1), 'Mother'] = 1
+	# FamilySize
+	test['FamilySize'] = float(1) + test.Parch + test.SibSp
+	# Title
+	test['Title'] = float(0)
+	test.loc[(test.Name.str.find('Mr') == -1) & (test.Name.str.find('Mrs') == -1) & (test.Name.str.find('Miss') == -1), 'Title'] = 1
+	# CabinType
+	test['CabinType'] = float('NaN')
+	test.loc[test.Cabin.notnull(), 'CabinType'] = test.Cabin.str[0]
+	test.loc[test.Cabin.isnull(), 'CabinType'] = 'A'
+	# dummy Pclass and Sex
+	dummies_Pclass = pd.get_dummies(test['Pclass'], prefix='Pclass')
+	dummies_Sex = pd. get_dummies(test['Sex'], prefix='Sex')
+	dummies_CabinType = pd.get_dummies(test['CabinType'], prefix='CabinType')
+
+	test = pd.concat([test, dummies_Sex, dummies_Pclass, dummies_CabinType], axis=1)
+	test['CabinType_T'] = float(0)
+
+	# 去掉Name, Ticket, Embarked
+	test = test.drop(['Name', 'Ticket', 'Embarked', 'Cabin', 'CabinType', 'Sex', 'Pclass', 'SibSp', 'Parch'], axis=1)
+
+	# Features Scaling
+	test['Age'] = mapper.fit_transform(test)[:, 0]
+	test['Fare'] = mapper.fit_transform(test)[:, 1]
+	test['FamilySize'] = mapper.fit_transform(test)[:, 2]
+
+	return X, y, X_cv, y_cv, test.as_matrix()[:, 1:], test.as_matrix()[:, 0]
+
+def titanic5():
+	X, y, X_cv, y_cv, X_test, test_id = preparing()
+
+	clf = linear_model.LogisticRegression(C=1.0, penalty='l1', tol=1e-6)
+	cross_val_score(clf, X, y, cv=5)
+	clf.fit(X, y)
+
+	cv = ShuffleSplit(n_splits=100, test_size=0.3, random_state=0)
+	plot_learning_curve(clf, u"学习曲线", X, y, cv=cv)
+
+	print clf.score(X_cv, y_cv)
+
+	res_predictions = clf.predict(X_test)
+	result = pd.DataFrame({'PassengerId': test_id.astype(np.int32), 'Survived': res_predictions.astype(np.int32)})
+	result.to_csv("prediction5.csv", index=False)
+
 if __name__ == '__main__':
 	# titanic1()
 	# titanic2()
@@ -458,4 +566,5 @@ if __name__ == '__main__':
 	# features2()
 	# titanic3()
 	# cv_train()
-	modelensemble()
+	# modelensemble()
+	titanic5()
